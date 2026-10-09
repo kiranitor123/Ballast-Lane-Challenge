@@ -26,7 +26,8 @@ WORKDIR /app
 
 RUN apt-get update && \
     apt-get install -y --no-install-recommends nginx curl && \
-    rm -rf /var/lib/apt/lists/*
+    rm -rf /var/lib/apt/lists/* && \
+    rm -rf /etc/nginx/sites-enabled/* /etc/nginx/sites-available/*
 
 COPY --from=backend-builder /app/backend/target/pokemon-api-0.0.1-SNAPSHOT.jar /app/app.jar
 COPY --from=frontend-builder /app/frontend/dist /usr/share/nginx/html
@@ -36,7 +37,8 @@ COPY backend/data/pokemondb.mv.db /app/data/pokemondb.mv.db
 
 COPY docker/nginx.conf /etc/nginx/nginx.conf
 COPY docker/entrypoint.sh /app/entrypoint.sh
-RUN sed -i 's/\r$//' /app/entrypoint.sh && chmod +x /app/entrypoint.sh
+RUN sed -i 's/\r$//' /app/entrypoint.sh && chmod +x /app/entrypoint.sh && \
+    find /usr/share/nginx/html /app -type l -delete
 
 # Single entrypoint port: Nginx serves the UI and proxies /api to Spring Boot
 EXPOSE 80

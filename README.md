@@ -16,6 +16,11 @@ Web application to explore, search, and synchronize Pokémon data using the publ
 7. [Unit Test Suite](#unit-test-suite)
    - [Backend Tests](#backend-tests)
    - [Frontend Tests](#frontend-tests)
+8. [Thought Process and Engineering Decisions](#thought-process-and-engineering-decisions)
+   - [Data Ingestion and Cache-Aside Strategy](#data-ingestion-and-cache-aside-strategy)
+   - [Backend Layering and Security](#backend-layering-and-security)
+   - [Human-Centered Design and Accessibility](#human-centered-design-and-accessibility)
+   - [Testing Strategy and Verification](#testing-strategy-and-verification)
 
 ## Architecture
 
@@ -269,3 +274,51 @@ Result: 18 tests across 6 suites, 0 failures.
 - Remains hidden when scroll position is at the top.
 - Appears once vertical scroll exceeds 300 pixels.
 - Invokes `window.scrollTo({ top: 0, behavior: 'smooth' })` on click.
+
+## Thought Process and Engineering Decisions
+
+### Data Ingestion and Cache-Aside Strategy
+
+The public PokeAPI provides detailed Pokémon data, but its nested endpoints (pokemon, species, and evolution chains) make synchronous client-side lookups slow and susceptible to rate limits. Ingesting all 1000+ entries upfront at application startup would create long boot delays and unnecessary network load.
+
+To resolve this trade-off, I designed a hybrid cache-aside mechanism in the backend:
+1. Boot Seeding: On first startup, `DataSeeder` inserts an initial set of 20 Pokémon and a default administrator user into the local H2 database.
+2. Lazy Retrieval: When a user searches for an unseeded Pokémon by name or ID, `PokemonServiceImpl` queries the local database first. If the record is missing, it calls `PokeApiClient`, converts the upstream DTO to a domain entity, persists it in H2, and returns it.
+3. Concurrent Batch Pagination: For page requests that lack cached entries, the service queries PokeAPI using `CompletableFuture.allOf()` to fetch up to 20 items concurrently, keeping response times low without overwhelming the external server.
+4. On-Demand Evolution Chains: When opening a detail view, the backend traverses the `evolves_to` tree from the species endpoint and imports any missing members of that evolution line so navigation between evolutionary relatives remains instant.
+
+### Backend Layering and Security
+
+I structured the backend into four distinct layers: domain, application, infrastructure, and presentation.
+- Domain models (`Pokemon`, `PokemonAbility`, `User`, `Role`) remain decoupled from external HTTP concerns and Jackson annotations.
+- `PokeApiClient` isolates all communication with the third-party API. Any connection failure or missing resource produces a domain-specific exception instead of leaking raw `RestClient` errors.
+- `GlobalExceptionHandler` converts validation failures, missing entities, and invalid range inputs into standardized error responses with appropriate HTTP status codes (400, 404, 500).
+- Security utilizes stateless JWT authentication. Public users can browse, search, and inspect Pokémon details without friction, while data-modifying operations (such as manual synchronization and batch imports) require valid administrator credentials. Passwords are saved with BCrypt hashing.
+
+### Human-Centered Design and Accessibility
+
+In developing the frontend with React and Tailwind CSS, I prioritized real usability across different devices, input methods, and visual setups:
+
+1. Contrast and Color Discipline
+Pokémon types often use bright, saturated colors that pose readability issues when paired with white text. For example, yellow badges (Electric) or light green badges (Bug) fail WCAG AA contrast against white text. In `TypeBadge`, text colors are evaluated against each background tone to maintain at least a 4.5:1 ratio for normal text. Additionally, status signals and types never rely solely on color; every badge includes an explicit textual label.
+
+2. Comprehensive UI States
+Every data view supports three explicit states:
+- Loading: Skeleton cards and spinners give users continuous feedback during network round-trips without jarring layout shifts.
+- Empty: When search queries or filter selections match no records, the view displays a clear explanation with instructions to clear filters or try a different term, rather than showing a blank screen.
+- Error: Network or server failures produce a visible error banner describing the issue and allowing the user to retry the operation.
+
+3. Keyboard Navigation and Focus Management
+The interface does not assume a mouse is present:
+- All cards, navigation links, search inputs, and filter chips are focusable in a logical DOM order matching visual layout.
+- Focus outlines are never removed with `outline: none` without replacement. High-contrast `:focus-visible` rings identify the active control.
+- Modal dialogs (such as `SyncModal` and `EditPokemonModal`) trap focus and close when the user presses `Escape`.
+
+4. Mobile Layout and Zoom Resilience
+Buttons, filter selectors, and pagination controls use a minimum tap target of 44x44 pixels to ensure comfortable touch operation on mobile devices. The layout adapts fluidly between 320px mobile screens and wide desktop displays without horizontal scrolling. Text sizing uses relative units so zooming to 200% reflows content without clipping text inside fixed containers.
+
+### Testing Strategy and Verification
+
+Quality was validated through automated tests across both layers before considering the task complete:
+- Backend: 41 automated tests in JUnit 5 and Mockito cover controllers, services, JWT claim validation, and PokeAPI client parsing. I verified edge cases including invalid ID ranges, duplicate user registrations, and upstream 404 responses.
+- Frontend: 18 unit tests in Vitest and React Testing Library verify token storage integrity, navigation state changes, type badge color assignment, stat bar scaling against the 255 base maximum, and scroll-to-top visibility thresholds.
