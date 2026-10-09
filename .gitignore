@@ -1,0 +1,4 @@
+.acl-recovery/*
+.vscode/*
+backend/data/pokemondb.trace.db
+backend/data/pokemondb.lock.db

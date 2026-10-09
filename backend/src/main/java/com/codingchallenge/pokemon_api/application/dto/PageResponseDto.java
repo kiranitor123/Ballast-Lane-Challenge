@@ -1,0 +1,11 @@
+package com.codingchallenge.pokemon_api.application.dto;
+
+import java.util.List;
+
+public record PageResponseDto<T>(
+        List<T> content,
+        int page,
+        int size,
+        long totalElements,
+        int totalPages
+) {}

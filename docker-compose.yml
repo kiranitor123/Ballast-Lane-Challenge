@@ -1,0 +1,14 @@
+services:
+  pokedex-app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: pokedex-app
+    ports:
+      - "80:80"
+    restart: unless-stopped
+    volumes:
+      - pokedex-data:/app/data
+
+volumes:
+  pokedex-data:

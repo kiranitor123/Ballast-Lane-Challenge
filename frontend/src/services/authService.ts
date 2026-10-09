@@ -1,5 +1,5 @@
 import api from './api';
-import { type AuthResponse } from '../types';
+import type { AuthResponse } from '../types';
 
 export const login = async (username: string, password: string): Promise<AuthResponse> => {
   const response = await api.post<AuthResponse>('/auth/login', { username, password });
@@ -34,6 +34,12 @@ export const isAuthenticated = (): boolean => {
 
 export const getCurrentUser = (): { username: string; role: string } | null => {
   const userStr = localStorage.getItem('user');
-  if (userStr) return JSON.parse(userStr);
+  if (userStr) {
+    try {
+      return JSON.parse(userStr);
+    } catch {
+      return null;
+    }
+  }
   return null;
 };

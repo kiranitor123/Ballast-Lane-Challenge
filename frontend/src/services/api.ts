@@ -1,8 +1,10 @@
 import axios from 'axios';
 import { getToken } from './authService';
+
 const api = axios.create({
   baseURL: '/api',
 });
+
 api.interceptors.request.use((config) => {
   const token = getToken();
   if (token) {
@@ -10,4 +12,5 @@ api.interceptors.request.use((config) => {
   }
   return config;
 });
+
 export default api;
